@@ -1,0 +1,151 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "workspaceNameprefix": {
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 5
+    },
+    "storageSKU": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS",
+        "Standard_RAGRS",
+        "Standard_ZRS",
+        "Premium_LRS",
+        "Premium_ZRS",
+        "Standard_GZRS",
+        "Standard_RAGZRS"
+      ]
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "containerRegistrySku": {
+      "type": "string",
+      "defaultValue": "Standard",
+      "allowedValues": [
+        "Basic",
+        "Standard",
+        "Premium"
+        ]
+    },
+    "identityType": {
+            "type": "string",
+            "defaultValue": "systemAssigned",
+            "allowedValues": [
+                "systemAssigned",
+                "userAssigned",
+                "systemAssigned,userAssigned"
+            ]
+        },
+    "tagValues": {
+        "type": "object",
+        "defaultValue": {}
+    }
+  },
+  "variables": {
+    "tenantId": "[subscription().tenantId]",
+    "uniqueWorkspaceName": "[concat('workspaceml',uniqueString(resourceGroup().id))]",
+    "uniqueStorageName": "[concat('store',parameters('workspaceNameprefix'), uniqueString(resourceGroup().id))]",
+    "uniqueRegistryName": "[concat('regis',parameters('workspaceNameprefix'), uniqueString(resourceGroup().id))]",
+    "uniqueappInsightName": "[concat('appin',parameters('workspaceNameprefix'), uniqueString(resourceGroup().id))]",
+    "uniquekeyVaultName": "[concat('appin',parameters('workspaceNameprefix'), uniqueString(resourceGroup().id))]",
+    "storageAccountId": "[resourceId(resourceGroup().name, 'Microsoft.Storage/storageAccounts', variables('uniqueStorageName'))]",
+    "keyVaultId": "[resourceId(resourceGroup().name, 'Microsoft.KeyVault/vaults', variables('uniquekeyVaultName'))]",
+    "containerRegistryId": "[resourceId(resourceGroup().name, 'Microsoft.ContainerRegistry/registries', variables('uniqueRegistryName'))]",
+    "applicationInsightId": "[resourceId(resourceGroup().name, 'Microsoft.Insights/components', variables('uniqueappInsightName'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2022-05-01",
+      "name": "[variables('uniqueStorageName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('storageSKU')]"
+      },
+      "kind": "StorageV2",
+      "tags": "[parameters('tagValues')]",
+      "properties": {
+        "supportsHttpsTrafficOnly": true,
+        "encryption": {
+                    "services": {
+                        "blob": {
+                            "enabled": true
+                        },
+                        "file": {
+                            "enabled": true
+                        }
+                    },
+                "keySource": "Microsoft.Storage"
+            }
+      }
+    },
+    {
+      "type": "Microsoft.ContainerRegistry/registries",
+      "apiVersion": "2022-02-01-preview",
+      "name": "[variables('uniqueRegistryName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+            "name": "[parameters('containerRegistrySku')]"
+      },
+      "tags": "[parameters('tagValues')]",
+      "properties": {
+          "adminUserEnabled": true
+        }
+    },
+    {
+        "type": "Microsoft.Insights/components",
+        "apiVersion": "2020-02-02",
+        "name": "[variables('uniqueappInsightName')]",
+        "location": "[parameters('location')]",
+        "kind": "web",
+        "tags": "[parameters('tagValues')]",
+        "properties": {
+            "Application_Type": "web"
+        }
+    },
+    {
+        "type": "Microsoft.KeyVault/vaults",
+        "apiVersion": "2022-07-01",
+        "name": "[variables('uniquekeyVaultName')]",
+        "location": "[parameters('location')]",
+        "tags": "[parameters('tagValues')]",
+        "properties": {
+            "tenantId": "[variables('tenantId')]",
+            "sku": {
+                "name": "standard",
+                "family": "A"
+            },
+            "accessPolicies": []
+        }
+    },
+    {
+      "type" : "Microsoft.MachineLearningServices/workspaces",
+      "apiVersion" : "2022-10-01",
+      "name": "[variables('uniqueWorkspaceName')]",
+      "location":"[parameters('location')]",
+      "identity": {
+            "type": "[parameters('identityType')]"
+        },
+      "properties":{
+        "friendlyName": "[variables('uniqueWorkspaceName')]",
+        "storageAccount": "[variables('storageAccountId')]",
+        "keyVault": "[variables('keyVaultId')]",
+        "applicationInsights": "[variables('applicationInsightId')]",
+        "containerRegistry": "[variables('containerRegistryId')]"
+        },
+        "dependsOn": [
+        "[resourceId('Microsoft.Insights/components', variables('uniqueappInsightName'))]",
+        "[resourceId('Microsoft.ContainerRegistry/registries', variables('uniqueRegistryName'))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('uniqueStorageName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('uniquekeyVaultName'))]"
+        ]
+    }
+  ]
+}
